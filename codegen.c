@@ -143,10 +143,10 @@ static T_offset lookup_offset_in_all_offset_scopes(T_offset_scope offset_scope, 
 void codegen(T_prog prog) {
   // no need to record symbols in the global offset_scope.  the assembler and linker handle them.
   current_offset_scope = NULL;
-
+  
   // emit assembly header
   printf(".file \"stdin\"\n");
-
+  
   // emit a .comm for global vars
   global_symbols = create_table();
   // loop over each global symbol.  emit .comm and add to global symtab
@@ -160,7 +160,6 @@ void codegen(T_prog prog) {
   }
 
   // emit an .rodata section and label for strings
-  fprintf(stderr, "TODO: collect string constants");
 
   // go through each function
   codegen_funclist(prog->funclist);
@@ -200,7 +199,7 @@ static void codegen_main(T_main main) {
   MOV_TO_OFFSET("%rdi", offset);
   offset = lookup_offset_in_scope(current_offset_scope, "argv");
   MOV_TO_OFFSET("%rsi", offset);
-
+  
   COMMENT("generate code for the body");
   codegen_stmtlist(main->stmtlist);
 
@@ -223,45 +222,33 @@ static void codegen_funclist(T_funclist funclist) {
   }
 }
 
-static void codegen_func(T_func func)
-{
-    int val;
-
-    current_offset_scope = create_offset_scope( current_offset_scope );
-
-    printf( ".text\n" );
-    printf( ".globl %s\n", func->ident );
-    printf(".type %s, @function\n", func->ident );
-    printf( "%s: \n", func->ident );
-
-    insert_offset( current_offset_scope, func->paramlist->ident, 8 );
-    codegen_decllist( func->decllist );
-    COMMENT( "emit the function prologue" );
-    emit_prologue( current_offset_scope->stack_size );
-    COMMENT("move parameter onto the stack" );
-
-    val = lookup_offset_in_scope( current_offset_scope, func->paramlist->ident );
-
-    MOV_TO_OFFSET("%rdi", val );
+static void codegen_func(T_func func) {
+    current_offset_scope = create_offset_scope(current_offset_scope);
+    printf(".text\n");
+    printf(".globl %s\n", func->ident);
+    printf(".type %s, @function\n", func->ident);
+    printf("%s:\n", func->ident);
+    insert_offset(current_offset_scope, func->paramlist->ident, 8);
+    codegen_decllist(func->decllist);
+    COMMENT("emit the function prologue");
+    emit_prologue(current_offset_scope->stack_size);
+    COMMENT("move parameter onto stack");
+    int val = lookup_offset_in_scope(current_offset_scope, func->paramlist->ident);
+    MOV_TO_OFFSET("%rdi", val);
     COMMENT("generate code for the body");
-    codegen_stmtlist( func->stmtlist );
+    codegen_stmtlist(func->stmtlist);
     COMMENT("generate code for the return expression");
-    codegen_expr( func->returnexpr );
+    codegen_expr(func->returnexpr);
     POP("%rax");
-
-    COMMENT("emit epilogue" );
+    COMMENT("emit the epilogue");
     emit_epilogue();
-
-    current_offset_scope = destroy_offset_scope( current_offset_scope );
-
+    current_offset_scope = destroy_offset_scope(current_offset_scope);
 }
 
-static void codegen_decllist(T_decllist decllist)
-{
-    while( decllist )
-    {
-      insert_offset( current_offset_scope, decllist->decl->ident, 8 );
-      decllist = decllist->tail;
+static void codegen_decllist(T_decllist decllist) {
+    while(decllist) {
+        insert_offset(current_offset_scope, decllist->decl->ident, 8);
+        decllist = decllist->tail;
     }
 }
 
@@ -288,20 +275,15 @@ static void codegen_stmt(T_stmt stmt) {
   }
 }
 
-static void codegen_assignstmt(T_stmt stmt)
-{
-    int val;
-    COMMENT("generate code for the assignment" );
-    codegen_expr( stmt->assignstmt.right );
-
-    val = lookup_offset_in_scope( current_offset_scope, stmt->assignstmt.left->identexpr );
-    MOV_TO_OFFSET("%rax", val );
-    POP("$rax" );
-
+static void codegen_assignstmt(T_stmt stmt) {
+    COMMENT("generate code for the right-hand side of the assignment");
+    codegen_expr(stmt->assignstmt.right);
+    POP("%rax");
+    int val = lookup_offset_in_scope(current_offset_scope, stmt->assignstmt.left->identexpr);
+    MOV_TO_OFFSET("%rax", val);
 }
 
-static void codegen_ifstmt(T_stmt stmt)
-{
+static void codegen_ifstmt(T_stmt stmt) {
   // pending project 4
   fprintf(stderr, "TODO: codegen_ifstmt (project 4)\n");
 }
@@ -316,11 +298,9 @@ static void codegen_whilestmt(T_stmt stmt) {
   fprintf(stderr, "TODO: codegen_whilestmt (project 4)\n");
 }
 
-static void codegen_compoundstmt(T_stmt stmt)
-{
-    codegen_stmtlist( stmt->compoundstmt.stmtlist );
-
-    codegen_decllist( stmt->compoundstmt.decllist );
+static void codegen_compoundstmt(T_stmt stmt) {
+    codegen_stmtlist(stmt->compoundstmt.stmtlist);
+    codegen_decllist(stmt->compoundstmt.decllist);
 }
 
 /* expressions */
@@ -351,39 +331,27 @@ static void codegen_identexpr(T_expr expr) {
   PUSH("%rax");
 }
 
-static void codegen_callexpr(T_expr expr)
-{
-    COMMENT( "evaluate parameter " );
-    COMMENT("push the integer");
-    MOV_FROM_IMMEDIATE( expr->callexpr.args->expr->intexpr, "%rax" );
-    PUSH( "%rax" );
-
-    COMMENT( "pass parameter" );
-    POP("%rdi" );
-
+static void codegen_callexpr(T_expr expr) {
+    COMMENT("evalute the parameter");
+    codegen_expr(expr->callexpr.args->expr);
+    COMMENT("pass the parameter");
+    POP("%rdi");
     COMMENT("call the function");
-    CALL( expr->callexpr.ident );
-
-    COMMENT("push the return value" );
-    PUSH( "%rax" );
-
+    CALL(expr->callexpr.ident);
+    COMMENT("push the return value");
+    PUSH("%rax");
 }
 
-static void codegen_intexpr(T_expr expr)
-{
-    COMMENT("push integer" );
-    MOV_FROM_IMMEDIATE( expr->intexpr, "%rax" );
-    PUSH("%rax" );
-
+static void codegen_intexpr(T_expr expr) {
+    COMMENT("push the integer");
+    MOV_FROM_IMMEDIATE(expr->intexpr, "%rax");
+    PUSH("%rax");
 }
 
 static void codegen_charexpr(T_expr expr) {
   COMMENT("push the character");
   MOV_FROM_IMMEDIATE((int) expr->charexpr, "%rax");
   PUSH("%rax");
-  POP("%rax");
-
-  MOV_TO_OFFSET( "%rax", current_offset_scope->stack_size );
 }
 
 static void codegen_strexpr(T_expr expr) {
@@ -398,74 +366,58 @@ static void codegen_unaryexpr(T_expr expr) {
   fprintf(stderr, "TODO: codegen_unaryexpr\n");
 }
 
-static void codegen_binaryexpr(T_expr expr)
-{
-    COMMENT("generate code for the left operand " );
-    codegen_expr( expr->binaryexpr.left );
-
-    COMMENT("generate code for the right operand " );
-    codegen_expr( expr->binaryexpr.right );
-
-    COMMENT("pop the right operand" );
-    POP( "%rbx" );
-
-    COMMENT("pop the left operand " );
-    POP("%rax" );
-
-    switch( expr->binaryexpr.op )
-    {
+static void codegen_binaryexpr(T_expr expr) {
+    COMMENT("generate code for the left operand");
+    codegen_expr(expr->binaryexpr.left);
+    COMMENT("generate code for the right operand");
+    codegen_expr(expr->binaryexpr.right);
+    COMMENT("pop the right operand");
+    POP("%rbx");
+    COMMENT("pop the left operand");
+    POP("%rax");
+    switch(expr->binaryexpr.op) {
         case E_op_plus:
-            COMMENT("do addition" );
-            ADD("%rbx", "%rax" );
-
-
-
-
-            COMMENT("save the return expression into %rax" );
+            COMMENT("do the addition");
+            ADD("%rbx", "%rax");
+            COMMENT("push the expression result");
+            PUSH("%rax");
+            COMMENT("save the return expression into %rax per the abi");
             break;
         case E_op_minus:
-            COMMENT("do subtraction" );
-            SUB("%rbx", "%rax" );
-
-
-
-
+            COMMENT("do the subtraction");
+            SUB("%rbx", "%rax");
+            COMMENT("push the expression result");
+            PUSH("%rax");
             break;
         case E_op_times:
-            COMMENT("do multiplication" );
-            IMUL("%rbx", "%rax" );
-
-
-
-
+            COMMENT("do the multiplication");
+            IMUL("%rbx", "%rax");
+            COMMENT("push the expression result");
+            PUSH("%rax");
             break;
         case E_op_divide:
-            COMMENT("do division" );
+            COMMENT("do the division");
             CDQ();
-            IDIV("%rbx" );
-
-
+            IDIV("%rbx");
+            COMMENT("push the expression result");
+            PUSH("%rax");
             break;
         case E_op_mod:
-            COMMENT("do the mod operation" );
+            COMMENT("do the remainder");
             CDQ();
-
-            IDIV("%rbx" );
-            MOV( "%rdx", "%rax" );
-
-
-
+            IDIV("%rbx");
+            MOV("%rdx", "%rax");
+            COMMENT("push the expression result");
+            PUSH("%rax");
             break;
         default:
-
+            PUSH("%rax");
             break;
     }
-    COMMENT("push the expression result ");
-    PUSH("%rax" );
 }
 
 static void codegen_castexpr(T_expr expr) {
-  // bonus: truncate or extend data between bitwidths depending on type
+  // bonus: truncate or extend data between bitwidths depending on type  
 }
 
 /**
@@ -521,5 +473,5 @@ static int bitwidth(T_type type) {
     fprintf(stderr, "FATAL: unexpected kind in bitwidth\n");
     exit(1);
     break;
-  }
+  }  
 }
