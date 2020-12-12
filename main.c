@@ -4,6 +4,8 @@
 
 #include "ast_printer.h"
 
+#include "codegen.h"
+
 #include "parser.tab.h"
 
 #include "typecheck.h"
