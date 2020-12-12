@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
   // kick off the parser, which will store the result in program_ast
   yyparse();
 
-  check_prog( program_ast );
+  //check_prog( program_ast );
 
   codegen( program_ast );
 
