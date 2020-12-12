@@ -236,16 +236,16 @@ static void codegen_func(T_func func)
 
     insert_offset( current_offset_scope, func->paramlist->ident, 8 );
     codegen_decllist( func->decllist );
-    COMMENT( "emit function prologue" );
+    COMMENT( "emit the function prologue" );
     emit_prologue( current_offset_scope->stack_size );
-    COMMENT("move parameter on to the stack" );
+    COMMENT("move parameter onto the stack" );
 
     val = lookup_offset_in_scope( current_offset_scope, func->paramlist->ident );
 
     MOV_TO_OFFSET("%rdi", val );
     COMMENT("generate code for the body");
     codegen_stmtlist( func->stmtlist );
-    COMMENT("generate code for return expression");
+    COMMENT("generate code for the return expression");
     codegen_expr( func->returnexpr );
     POP("%rax");
 
@@ -354,13 +354,19 @@ static void codegen_identexpr(T_expr expr) {
 static void codegen_callexpr(T_expr expr)
 {
     COMMENT( "evaluate parameter " );
-    codegen_expr( expr->callexpr.args->expr );
+    COMMENT("push the integer");
+    MOV_FROM_IMMEDIATE( expr->callexpr.args->expr->intexpr, "%rax" );
+    PUSH( "%rax" );
 
     COMMENT( "pass parameter" );
     POP("%rdi" );
 
+    COMMENT("call the function");
+    CALL( expr->callexpr.ident );
+
     COMMENT("push the return value" );
     PUSH( "%rax" );
+
 }
 
 static void codegen_intexpr(T_expr expr)
@@ -375,6 +381,9 @@ static void codegen_charexpr(T_expr expr) {
   COMMENT("push the character");
   MOV_FROM_IMMEDIATE((int) expr->charexpr, "%rax");
   PUSH("%rax");
+  POP("%rax");
+
+  MOV_TO_OFFSET( "%rax", current_offset_scope->stack_size );
 }
 
 static void codegen_strexpr(T_expr expr) {
@@ -409,8 +418,8 @@ static void codegen_binaryexpr(T_expr expr)
             COMMENT("do addition" );
             ADD("%rbx", "%rax" );
 
-            COMMENT("push the result");
-            PUSH("%rax" );
+
+
 
             COMMENT("save the return expression into %rax" );
             break;
@@ -418,24 +427,24 @@ static void codegen_binaryexpr(T_expr expr)
             COMMENT("do subtraction" );
             SUB("%rbx", "%rax" );
 
-            COMMENT("push the result");
-            PUSH("%rax" );
+
+
 
             break;
         case E_op_times:
             COMMENT("do multiplication" );
             IMUL("%rbx", "%rax" );
 
-            COMMENT("push the result");
-            PUSH("%rax" );
+
+
 
             break;
         case E_op_divide:
             COMMENT("do division" );
             CDQ();
             IDIV("%rbx" );
-            COMMENT("push the result " );
-            PUSH("%rax" );
+
+
             break;
         case E_op_mod:
             COMMENT("do the mod operation" );
@@ -443,14 +452,16 @@ static void codegen_binaryexpr(T_expr expr)
 
             IDIV("%rbx" );
             MOV( "%rdx", "%rax" );
-            COMMENT("push the result ");
 
-            PUSH( "%rax" );
+
+
             break;
         default:
-            PUSH("%rax" );
+
             break;
     }
+    COMMENT("push the expression result ");
+    PUSH("%rax" );
 }
 
 static void codegen_castexpr(T_expr expr) {
